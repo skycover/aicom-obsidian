@@ -43,7 +43,19 @@ for current inference.
 NB. At the border of a context window of your downloaded AI model the inference
 may work unexpectedly. So if model behave strange, check the status bar numbers.
 
+## Install instructions
+### Server
 AICom needs to connect to the local AI server (it may be also installed on
 a different computer and accessed via network).
 Follow instructions in https://github.com/skycover/aicom-llama.cpp to setup
 your own AI brain.
+### Plugin
+Clone this repository inside the plugins directory of your Obsidian vault:
+```
+cd Vault/.obsidian/plugins
+git clone https://github.com/skycover/aicom-obsidian.git
+```
+Enable plugin in Obsidian settings.
+Check the plugin Settings page.
+Open a new document, write something and click on a robot icon.
+The inference may need some time to load model into memory.
