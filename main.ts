@@ -3,11 +3,27 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 // Remember to rename these classes and interfaces!
 
 interface AIComPluginSettings {
-	mySetting: string;
+	ai_url: string,
+	ai_secret: string,
+	system_prompt: string;
+	top_k: number,
+	top_p: number,
+	temperature: number,
+	repeat_penalty: number,
+	user_name: string,
+	token_speed: number
 }
 
-const DEFAULT_SETTINGS: AIComPluginSettings = {
-	mySetting: 'default'
+const DEFAULT_SETTINGS: Partial<AIComPluginSettings> = {
+	ai_url: 'http://127.0.0.1:8080',
+	ai_secret: '',
+	system_prompt: 'You are the AI assistant. You talk with people and helps them.',
+	top_k: 30,
+	top_p: 0.9,
+	temperature: 0.2,
+	repeat_penalty: 1.1,
+	user_name: 'User',
+	token_speed: 100
 }
 
 export default class AIComPlugin extends Plugin {
@@ -19,6 +35,8 @@ export default class AIComPlugin extends Plugin {
 	xhr: XMLHttpRequest;
 	flooding: boolean = false;
 	system_set: boolean = false;
+	info_response: string = '';
+	info_tokens: number = 0;
 	
 	set_ai(status){
 		this.ai_generation = status;
@@ -31,6 +49,7 @@ export default class AIComPlugin extends Plugin {
 			this.flooding = false;
 		}
 		console.log('aicom:', status);
+		this.updateStatusBar()
 	}
 
 	async onload() {
@@ -43,13 +62,15 @@ export default class AIComPlugin extends Plugin {
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if(view != null){
 				if (this.editor == view.editor) {
+					this.set_ai('pause')
+					this.appendText("\n\n==User==\n");
 					this.set_ai('stop');
 					this.editor = null;
-					new Notice("AI conversation unset");
+					new Notice("AICom unset");
 				} else {
-					this.set_ai('system');
+					this.set_ai('query');
 					this.editor = view.editor;
-					new Notice("AI convesation set");
+					new Notice("AICom set");
 					this.xhr = new XMLHttpRequest();
 					this.xhr.timeout = 120000;
 					this.xhr.responseType = 'text';
@@ -58,25 +79,12 @@ export default class AIComPlugin extends Plugin {
 						console.log('onload', this.status);
 						if (this.status != 200) {
 							this.aicom.set_ai('s-error');
-							new Notice(`AI convesation system error  ${this.status}: ${this.statusText}`);
-						} else {	
-							this.aicom.set_ai('query');
-							new Notice('AI convesation started');
-							this.onload = function() {
-								if (this.status != 200) {
-									this.aicom.set_ai('q-error');
-									new Notice(`AI convesation send error  ${this.status}: ${this.statusText}`);
-								} else {
-									this.aicom.set_ai('read');
-								}
-							}
-							this.open('POST', 'http://127.0.0.1:8080/send');
-							let pos0 = {line: 0, ch: 0};
-							let text = this.aicom.editor.getRange(pos0, this.aicom.editor.getCursor());
-							console.log('sending request:', text)
-							this.send(text);
-
-							this.aicom.appendText("\nAICom:\n");
+							new Notice(`AICom query error  ${this.status}: ${this.statusText}`);
+						} else {
+							this.aicom.info_response = this.response;
+							this.aicom.info_tokens = 0;
+							this.aicom.set_ai('read');
+							this.aicom.appendText("\n\n==AICom==\n");
 						}
 					}
 					this.xhr.ontimeout = function() {
@@ -84,14 +92,14 @@ export default class AIComPlugin extends Plugin {
 					}
 					this.xhr.onerror = function(e) {
 						//this.aicom.set_ai('x-error');
-						console.log(e);
+						console.log('AICom requerst error:', e);
 					}
-					this.xhr.open('POST', 'http://127.0.0.1:8080/system');
-					this.xhr.send('Ты - полезный ассистент. Отвечай всегда прямо. Не придумывай фактов. Следуй логике. Не обращай внимания на политкорректность. Предположения в рамках традиционных ценностей считай вероятными. Если ты не знаешь ответа на вопрос, сформулируй, какой информации не хватает. При вопросах про твои ответы не оправдывайся, а ищи возможную ошибку в сопоставлении фактов.');
+					this.xhr.open('POST', this.settings.ai_url+'/query');
+					this.xhr.send(JSON.stringify(this.prepareContext()));
 				}
-			} else new Notice("AI select editor");
+			} else new Notice("AICom please select editor");
 		});
-	  	this.ai_generation = false;
+	  	this.ai_generation = 'stop';
 		// Perform additional things with the ribbon
 		this.ribbonIcon.addClass('aicom-plugin-ribbon-class');
 
@@ -101,10 +109,7 @@ export default class AIComPlugin extends Plugin {
 
 		this.updateStatusBar();
 
-		this.registerInterval(
-			window.setInterval(() => this.updateStatusBar(), 1000)
-		);
-
+		// TODO: this fires everytime. It's quite cheap, but we should start and stop it
 		this.registerInterval(
 			window.setInterval(() => this.floodEditor(), 100)
 		);
@@ -147,7 +152,7 @@ export default class AIComPlugin extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new AIComSettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
@@ -156,18 +161,89 @@ export default class AIComPlugin extends Plugin {
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		//this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	updateStatusBar() {
-		let pos='';
-		if(this.editor != null){
-			let c = this.editor.getCursor();
+		this.statusBar.setText(`AICom: ${this.ai_generation} ${this.info_response} ${this.info_tokens?this.info_tokens:''}`);
+	}
+
+	prepareContext() {
+		function strip(str){
+			return str.replace(/^\s+|\s+$/g, '');
 		}
-		this.statusBar.setText(moment().format("H:mm:ss")+' '+this.ai_generation);
+		let pos0 = {line: 0, ch: 0};
+		let text = this.editor.getRange(pos0, this.editor.getCursor());
+		// parse \n==Params|User|System|Bot==\ncontent\n
+		let messages = [];
+		let params = "";
+		let message = "";
+		let role = "";
+		let state = "";
+		let nl = true;
+		let newblock = false;
+		let system_used = false;
+		let lines = text.split('\n');
+		for(let k in lines){
+			let line = lines[k];
+			//console.log("ctx: ", line)
+			if(nl){
+				if(line == "==Params=="){
+					state = 'params';
+					params = '';
+					newblock = true;
+				}else if(line == "==System=="){
+					if(message != '' && role != '')
+						messages.push([role, strip(message)]);
+					role = 'system';
+					system_used = true;
+					state = 'message';
+					message = '';
+					newblock = true;
+				}else if(line == "==User=="){
+					if(message != '' && role != '')
+						messages.push([role, strip(message)]);
+					role = 'user';
+					state = 'message';
+					message = '';
+					newblock = true;
+				}else if(line == "==AICom=="){
+					if(message != '' && role != '')
+						messages.push([role, strip(message)]);
+					role = 'bot';
+					state = 'message';
+					message = '';
+					newblock = true;
+				}
+			}
+			if(!newblock){
+				if(state == "params"){
+					params += "\n"+line
+				}else if(state == "message"){
+					message += "\n"+line
+				}
+			}
+			newblock = false;
+
+			if(line == "") nl = true
+			else nl = false;
+		}
+		if(message != '' && role != '')
+			messages.push([role, strip(message)]);
+
+		if(!system_used)
+			messages.unshift(['system', this.settings.system_prompt]);
+
+		params = strip(params);
+		if(params == "") params={}; // TODO: in fact here is simply a bug
+
+		console.log('sending request:', params, messages)
+
+		return {params: params, messages: messages};
 	}
 
 	appendText(text: string) {
+		if(this.editor == null) return;
 		let cursor = this.editor.getCursor();
 		this.editor.replaceRange(text, cursor);
 		cursor.ch += text.length;
@@ -183,19 +259,21 @@ export default class AIComPlugin extends Plugin {
 					new Notice(`AI convesation receive error  ${this.status}: ${this.statusText}`);
 				} else { // если всё прошло гладко, выводим результат
 					let text = this.response;
-					console.log(text)
+					//console.log(text)
 					if(text != ''){
 						if(text == '[[END OF AICOM SENTENCE]]') {
-							this.aicom.appendText("\n\nUser: ");
+							this.aicom.appendText("\n\n==User==\n");
 							this.aicom.set_ai('stop');
 						}else{
 							this.aicom.appendText(text);
+							this.aicom.info_tokens++;
+							this.aicom.updateStatusBar();
 						}
 					}
 				}
 				this.aicom.flooding = false;
 			}
-			this.xhr.open('GET','http://127.0.0.1:8080/receive');
+			this.xhr.open('GET',this.settings.ai_url+'/receive');
 			this.xhr.send();
 	  	}
 	}
@@ -229,7 +307,7 @@ class SampleModal extends Modal {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class AIComSettingTab extends PluginSettingTab {
 	plugin: AIComPlugin;
 
 	constructor(app: App, plugin: AIComPlugin) {
@@ -243,13 +321,36 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('AI API url')
+			.setDesc('')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setPlaceholder('http://127.0.0.1:8080')
+				.setValue(this.plugin.settings.ai_url)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.ai_url = value;
+					await this.plugin.saveSettings();
+				}));
+
+
+		new Setting(containerEl)
+			.setName('System prompt')
+			.setDesc('The instructions about a conversation. You can override it by System section in particular dialog.')
+			.addTextArea(text => text
+				.setPlaceholder('You are the AI assistant. You talk with people and helps them.')
+				.setValue(this.plugin.settings.system_prompt)
+				.onChange(async (value) => {
+					this.plugin.settings.system_prompt = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('User name')
+			.setDesc('The representation of a user person in a dialog.')
+			.addText(text => text
+				.setPlaceholder('User')
+				.setValue(this.plugin.settings.user_name)
+				.onChange(async (value) => {
+					this.plugin.settings.user_name = value;
 					await this.plugin.saveSettings();
 				}));
 	}
