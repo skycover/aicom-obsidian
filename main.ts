@@ -4,7 +4,7 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 
 interface AIComPluginSettings {
 	ai_url: string,
-	ai_secret: string,
+	ai_key: string,
 	system_prompt: string;
 	top_k: number,
 	top_p: number,
@@ -16,7 +16,7 @@ interface AIComPluginSettings {
 
 const DEFAULT_SETTINGS: Partial<AIComPluginSettings> = {
 	ai_url: 'http://127.0.0.1:8080',
-	ai_secret: '',
+	ai_key: '',
 	system_prompt: 'You are the AI assistant. You talk with people and helps them.',
 	top_k: 30,
 	top_p: 0.9,
@@ -239,7 +239,7 @@ export default class AIComPlugin extends Plugin {
 
 		console.log('sending request:', params, messages)
 
-		return {params: params, messages: messages};
+		return {key: this.settings.ai_key, params: params, messages: messages};
 	}
 
 	appendText(text: string) {
@@ -273,7 +273,7 @@ export default class AIComPlugin extends Plugin {
 				}
 				this.aicom.flooding = false;
 			}
-			this.xhr.open('GET',this.settings.ai_url+'/receive');
+			this.xhr.open('GET',this.settings.ai_url+'/receive?key='+this.settings.ai_key);
 			this.xhr.send();
 	  	}
 	}
@@ -331,7 +331,17 @@ class AIComSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		new Setting(containerEl)
+		.setName('AI API key')
+		.setDesc('')
+		.addText(text => text
+			.setValue(this.plugin.settings.ai_key)
+			.onChange(async (value) => {
+				this.plugin.settings.ai_key = value;
+				await this.plugin.saveSettings();
+			}));
 
+	
 		new Setting(containerEl)
 			.setName('System prompt')
 			.setDesc('The instructions about a conversation. You can override it by System section in particular dialog.')
