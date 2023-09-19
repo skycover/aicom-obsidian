@@ -38,7 +38,7 @@ export default class AIComPlugin extends Plugin {
 	info_response: string = '';
 	info_tokens: number = 0;
 	
-	set_ai(status){
+	set_ai(status:string){
 		this.ai_generation = status;
 		if (status.endsWith('-error')){
 			this.editor = null;
@@ -91,7 +91,7 @@ export default class AIComPlugin extends Plugin {
 						this.aicom.set_ai('t-error');
 					}
 					this.xhr.onerror = function(e) {
-						//this.aicom.set_ai('x-error');
+						this.aicom.set_ai('x-error');
 						console.log('AICom requerst error:', e);
 					}
 					this.xhr.open('POST', this.settings.ai_url+'/query');
@@ -170,7 +170,7 @@ export default class AIComPlugin extends Plugin {
 
 	prepareContext() {
 		function strip(str){
-			return str.replace(/^\s+|\s+$/g, '');
+			return str.replace(/^\s+$/g, ''); // only strip the end of line, not the start
 		}
 		let pos0 = {line: 0, ch: 0};
 		let text = this.editor.getRange(pos0, this.editor.getCursor());
@@ -231,6 +231,11 @@ export default class AIComPlugin extends Plugin {
 		if(message != '' && role != '')
 			messages.push([role, strip(message)]);
 
+		if(messages.length == 0){
+			this.prependText("==User==\n", pos0);
+			messages.push(['user', text]);
+		}
+
 		if(!system_used)
 			messages.unshift(['system', this.settings.system_prompt]);
 
@@ -240,6 +245,11 @@ export default class AIComPlugin extends Plugin {
 		console.log('sending request:', params, messages)
 
 		return {key: this.settings.ai_key, params: params, messages: messages};
+	}
+
+	prependText(text: string, pos) {
+		if(this.editor == null) return;
+		this.editor.replaceRange(text, pos);
 	}
 
 	appendText(text: string) {
@@ -254,10 +264,10 @@ export default class AIComPlugin extends Plugin {
 		if (!this.flooding && this.editor != null && this.ai_generation == 'read') {
 			this.flooding = true;
 			this.xhr.onload = function() {
-				if (this.status != 200) { // анализируем HTTP-статус ответа, если статус не 200, то произошла ошибка
+				if (this.status != 200) {
 					this.aicom.set_ai('r-error');
 					new Notice(`AI convesation receive error  ${this.status}: ${this.statusText}`);
-				} else { // если всё прошло гладко, выводим результат
+				} else {
 					let text = this.response;
 					//console.log(text)
 					if(text != ''){
