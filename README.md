@@ -27,8 +27,12 @@ AI answer
 ...and so on.
 ```
 
-You may use multiline text between separators.
+You may use multiline text between the separators.
 Don't forget newline before each separator but first.
+
+The separators for User and AICom are inserted automatically. If you need not in
+system prompt or parameters override, you may start conversation without any
+separators at all.
 
 You are free to edit any text before next query.
 
