@@ -218,9 +218,9 @@ export default class AIComPlugin extends Plugin {
 			}
 			if(!newblock){
 				if(state == "params"){
-					params += "\n"+line
+					params += (message==''?'':"\n")+line
 				}else if(state == "message"){
-					message += "\n"+line
+					message += (message==''?'':"\n")+line
 				}
 			}
 			newblock = false;
