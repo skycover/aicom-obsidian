@@ -8,6 +8,8 @@ You may start conversation inside any document by clicking on a robot icon
 in a toolbar. All text before cursor will be threated as a prior conversation
 and the inferenced answer will be typed after your last query.
 
+![AICom demo](https://github.com/skycover/aicom-obsidian/blob/master/aicom-demo.gif?raw=true)
+
 Special marking rules for conversation document:
 ```
 ==Params==
