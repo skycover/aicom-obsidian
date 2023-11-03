@@ -5,8 +5,9 @@ It uses locally maintained LLama-2 AI model served via
 https://github.com/skycover/aicom-llama.cpp server.
 
 You may start conversation inside any document by clicking on a robot icon
-in a toolbar. All text before cursor will be threated as a prior conversation
-and the inferenced answer will be typed after your last query.
+in a toolbar. All text before cursor (or only the selected text if any) will be
+threated as a prior conversation and the inferenced answer will be typed after
+your last sentence.
 
 ![AICom demo](https://github.com/skycover/aicom-obsidian/blob/master/aicom-demo.gif?raw=true)
 

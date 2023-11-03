@@ -173,8 +173,16 @@ export default class AIComPlugin extends Plugin {
 			return str.replace(/^\s+$/g, ''); // only strip the end of line, not the start
 		}
 		let pos0 = {line: 0, ch: 0};
-		let text = this.editor.getRange(pos0, this.editor.getCursor());
-		// parse \n==Params|User|System|Bot==\ncontent\n
+		let text = "";
+		let selected = this.editor.somethingSelected();
+		if( selected ){
+			text = this.editor.getSelection();
+			pos0 = this.editor.listSelections()[0].head;
+			this.editor.setCursor(this.editor.getCursor("to"));
+		}else{
+			text = this.editor.getRange(pos0, this.editor.getCursor());
+		}
+	// parse \n==Params|User|System|Bot==\ncontent\n
 		let messages = [];
 		let params = "";
 		let message = "";
@@ -232,7 +240,7 @@ export default class AIComPlugin extends Plugin {
 			messages.push([role, strip(message)]);
 
 		if(messages.length == 0){
-			this.prependText("==User==\n", pos0);
+			if(! selected) this.prependText("==User==\n", pos0);
 			messages.push(['user', text]);
 		}
 
@@ -269,7 +277,7 @@ export default class AIComPlugin extends Plugin {
 					new Notice(`AI convesation receive error  ${this.status}: ${this.statusText}`);
 				} else {
 					let text = this.response;
-					//console.log(text)
+					//console.log('"'+text+'"')
 					if(text != ''){
 						if(text == '[[END OF AICOM SENTENCE]]') {
 							this.aicom.appendText("\n\n==User==\n");
