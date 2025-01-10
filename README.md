@@ -68,4 +68,4 @@ Check the plugin Settings page.
 
 Open a new document, write something and click on a robot icon.
 
-The inference may need some time to load model into memory.
+For local model the inference may need some time to load model into memory.
