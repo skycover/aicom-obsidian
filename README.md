@@ -1,8 +1,8 @@
 # AI Companion Obsidian Plugin
 
 This is an AI Companion plugin made for Obsidian (https://obsidian.md).
-It uses locally maintained LLama-2 AI model served via
-https://github.com/skycover/aicom-llama.cpp server.
+It uses any OpenAI API interface, such as https://api.openai.com/v1, or llama.cpp
+locally served model.
 
 You may start conversation inside any document by clicking on a robot icon
 in a toolbar. All text before cursor (or only the selected text if any) will be
@@ -52,11 +52,10 @@ may work unexpectedly. So if model behave strange, check the status bar numbers.
 
 ## Install instructions
 ### Server
-AICom needs to connect to the local AI server (it may be also installed on
-a different computer and accessed via network).
+You will need access to OpenAI API server at https://api.openai.com/v1 with a token to it.
+Or you may run local llama.cpp server.
+Refer https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md
 
-Follow instructions in https://github.com/skycover/aicom-llama.cpp to setup
-your own AI brain.
 ### Plugin
 Clone this repository inside the plugins directory of your Obsidian vault:
 ```

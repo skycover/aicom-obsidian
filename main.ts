@@ -15,7 +15,7 @@ interface AIComPluginSettings {
 }
 
 const DEFAULT_SETTINGS: Partial<AIComPluginSettings> = {
-	ai_url: 'http://127.0.0.1:8080',
+	ai_url: 'https://api.openai.com/v1',
 	ai_key: '',
 	system_prompt: 'You are the AI assistant. You talk with people and helps them.',
 	top_k: 30,
@@ -32,11 +32,11 @@ export default class AIComPlugin extends Plugin {
 	editor: Editor;
 	ribbonIcon: HTMLElement;
 	ai_generation: string = 'stop';
-	xhr: XMLHttpRequest;
 	flooding: boolean = false;
 	system_set: boolean = false;
 	info_response: string = '';
 	info_tokens: number = 0;
+	reader: ReadableStreamDefaultReader | null = null;
 	
 	set_ai(status:string){
 		this.ai_generation = status;
@@ -71,31 +71,7 @@ export default class AIComPlugin extends Plugin {
 					this.set_ai('query');
 					this.editor = view.editor;
 					new Notice("AICom set");
-					this.xhr = new XMLHttpRequest();
-					this.xhr.timeout = 120000;
-					this.xhr.responseType = 'text';
-					this.xhr.aicom = this;
-					this.xhr.onload = function() {
-						console.log('onload', this.status);
-						if (this.status != 200) {
-							this.aicom.set_ai('s-error');
-							new Notice(`AICom query error  ${this.status}: ${this.statusText}`);
-						} else {
-							this.aicom.info_response = this.response;
-							this.aicom.info_tokens = 0;
-							this.aicom.set_ai('read');
-							this.aicom.appendText("\n\n==AICom==\n");
-						}
-					}
-					this.xhr.ontimeout = function() {
-						this.aicom.set_ai('t-error');
-					}
-					this.xhr.onerror = function(e) {
-						this.aicom.set_ai('x-error');
-						console.log('AICom requerst error:', e);
-					}
-					this.xhr.open('POST', this.settings.ai_url+'/query');
-					this.xhr.send(JSON.stringify(this.prepareContext()));
+					this.sendRequest();
 				}
 			} else new Notice("AICom please select editor");
 		});
@@ -218,7 +194,7 @@ export default class AIComPlugin extends Plugin {
 				}else if(line == "==AICom=="){
 					if(message != '' && role != '')
 						messages.push([role, strip(message)]);
-					role = 'bot';
+					role = 'assistant';
 					state = 'message';
 					message = '';
 					newblock = true;
@@ -252,7 +228,7 @@ export default class AIComPlugin extends Plugin {
 
 		console.log('sending request:', params, messages)
 
-		return {key: this.settings.ai_key, params: params, messages: messages};
+		return {messages: messages.map(([role, content]) => ({role, content})), stream: true};
 	}
 
 	prependText(text: string, pos) {
@@ -271,29 +247,59 @@ export default class AIComPlugin extends Plugin {
 	floodEditor() {
 		if (!this.flooding && this.editor != null && this.ai_generation == 'read') {
 			this.flooding = true;
-			this.xhr.onload = function() {
-				if (this.status != 200) {
-					this.aicom.set_ai('r-error');
-					new Notice(`AI convesation receive error  ${this.status}: ${this.statusText}`);
-				} else {
-					let text = this.response;
-					//console.log('"'+text+'"')
-					if(text != ''){
-						if(text == '[[END OF AICOM SENTENCE]]') {
-							this.aicom.appendText("\n\n==User==\n");
-							this.aicom.set_ai('stop');
-						}else{
-							this.aicom.appendText(text);
-							this.aicom.info_tokens++;
-							this.aicom.updateStatusBar();
+			if (this.reader) {
+				this.reader.read().then(({ done, value }) => {
+					if (done) {
+						this.appendText("\n\n==User==\n");
+						this.set_ai('stop');
+						this.reader = null;
+					} else {
+						//let text = new TextDecoder().decode(value);
+						let text = '';
+						try {
+							const data = JSON.parse(new TextDecoder().decode(value).substring(6));
+							if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
+								text = data.choices[0].delta.content;
+							}
+						} catch (error) {
+							console.error('Error parsing response:', error);
 						}
+						if(text != ''){
+							this.appendText(text);
+							this.info_tokens++;
+							this.updateStatusBar();
+						}
+						this.flooding = false;
 					}
-				}
-				this.aicom.flooding = false;
+				}).catch(error => {
+					this.set_ai('r-error');
+					new Notice(`AI conversation receive error: ${error}`);
+					this.reader = null;
+				});
 			}
-			this.xhr.open('GET',this.settings.ai_url+'/receive?key='+this.settings.ai_key);
-			this.xhr.send();
-	  	}
+		}
+	}
+
+	async sendRequest() {
+		const context = this.prepareContext();
+		const response = await fetch(`${this.settings.ai_url}/chat/completions`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${this.settings.ai_key}`
+			},
+			body: JSON.stringify(context)
+		});
+
+		if (!response.ok) {
+			this.set_ai('s-error');
+			new Notice(`AICom query error ${response.status}: ${response.statusText}`);
+			return;
+		}
+
+		this.reader = response.body.getReader();
+		this.set_ai('read');
+		this.appendText("\n\n==AICom==\n");
 	}
 
 	async onunload() {
@@ -342,7 +348,7 @@ class AIComSettingTab extends PluginSettingTab {
 			.setName('AI API url')
 			.setDesc('')
 			.addText(text => text
-				.setPlaceholder('http://127.0.0.1:8080')
+				.setPlaceholder('https://api.openai.com/v1')
 				.setValue(this.plugin.settings.ai_url)
 				.onChange(async (value) => {
 					this.plugin.settings.ai_url = value;
