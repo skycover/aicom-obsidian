@@ -261,6 +261,7 @@ export default class AIComPlugin extends Plugin {
 							const chunks = decodedValue.split('\n\n').filter(chunk => chunk.startsWith('data: '));
 						
 							for (const chunk of chunks) {
+								if (chunk == 'data: [DONE]') break;
 								const data = JSON.parse(chunk.substring(5)); // Удаляем 'data: ' из начала строки
 								if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
 									text += data.choices[0].delta.content;
