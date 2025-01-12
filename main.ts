@@ -257,12 +257,18 @@ export default class AIComPlugin extends Plugin {
 						//let text = new TextDecoder().decode(value);
 						let text = '';
 						try {
-							const data = JSON.parse(new TextDecoder().decode(value).substring(6));
-							if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
-								text = data.choices[0].delta.content;
+							const decodedValue = new TextDecoder().decode(value);
+							const chunks = decodedValue.split('\n\n').filter(chunk => chunk.startsWith('data: '));
+						
+							for (const chunk of chunks) {
+								const data = JSON.parse(chunk.substring(5)); // Удаляем 'data: ' из начала строки
+								if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
+									text += data.choices[0].delta.content;
+								}
 							}
 						} catch (error) {
 							console.error('Error parsing response:', error);
+							console.error('Received data: "'+ new TextDecoder().decode(value) + '"');
 						}
 						if(text != ''){
 							this.appendText(text);
