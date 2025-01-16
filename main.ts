@@ -240,7 +240,11 @@ export default class AIComPlugin extends Plugin {
 
 		console.log('sending request:', params, messages)
 
-		return {messages: messages.map(([role, content]) => ({role, content})), stream: true};
+		return {
+			messages: messages.map(([role, content]) => ({role, content})),
+			stream: true,
+			temperature: this.settings.temperature
+		};
 	}
 
 	prependText(text: string, pos) {
@@ -404,6 +408,18 @@ class AIComSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.user_name)
 				.onChange(async (value) => {
 					this.plugin.settings.user_name = value;
+					await this.plugin.saveSettings();
+				}));
+		
+		new Setting(containerEl)
+			.setName('Temperature')
+			.setDesc('Controls the randomness of the output. Lower values make the output more deterministic.')
+			.addSlider(slider => slider
+				.setLimits(0, 1, 0.01)
+				.setValue(this.plugin.settings.temperature)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.temperature = value;
 					await this.plugin.saveSettings();
 				}));
 	}
