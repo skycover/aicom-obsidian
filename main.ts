@@ -52,6 +52,18 @@ export default class AIComPlugin extends Plugin {
 		this.updateStatusBar()
 	}
 
+	cancel_stream() {
+		if (this.reader) {
+			this.reader.cancel().then(() => {
+				console.log('aicom stream cancelled');
+				this.reader = null;
+			}).catch(error => {
+				console.error('Error on close aicom stream:', error);
+				this.reader = null;
+			});
+		}
+	}
+
 	async onload() {
 		await this.loadSettings();
         console.log('loading aicom');
@@ -64,8 +76,8 @@ export default class AIComPlugin extends Plugin {
 				if (this.editor == view.editor) {
 					this.set_ai('pause')
 					this.appendText("\n\n==User==\n");
+					this.cancel_stream();
 					this.set_ai('stop');
-					this.editor = null;
 					new Notice("AICom unset");
 				} else {
 					this.set_ai('query');
@@ -252,7 +264,7 @@ export default class AIComPlugin extends Plugin {
 					if (done) {
 						this.appendText("\n\n==User==\n");
 						this.set_ai('stop');
-						this.reader = null;
+						this.cancel_stream();
 					} else {
 						//let text = new TextDecoder().decode(value);
 						let text = '';
