@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, View, moment } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, View, ViewStateResult, moment } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -30,6 +30,8 @@ export default class AIComPlugin extends Plugin {
 	settings: AIComPluginSettings;
 	statusBar: HTMLElement;
 	editor: Editor;
+	view: View;
+	viewState: any;
 	ribbonIcon: HTMLElement;
 	ai_generation: string = 'stop';
 	flooding: boolean = false;
@@ -38,13 +40,18 @@ export default class AIComPlugin extends Plugin {
 	info_tokens: number = 0;
 	reader: ReadableStreamDefaultReader | null = null;
 	
-	set_ai(status:string){
+	async set_ai(status:string){
 		this.ai_generation = status;
+		var vsresult: ViewStateResult = {history: false};;
 		if (status.endsWith('-error')){
+			if (this.view) await this.view.setState(this.viewState, vsresult);
 			this.editor = null;
+			this.view = null;
 			new Notice("AI conversation unset on error");
-		}else if(status == 'stop'){
+		}else if(status == 'stop'){			
+			if (this.view) await this.view.setState(this.viewState, vsresult);
 			this.editor = null;
+			this.view = null;
 		}else if(status == 'read'){
 			this.flooding = false;
 		}
@@ -69,7 +76,7 @@ export default class AIComPlugin extends Plugin {
         console.log('loading aicom');
 
 		// This creates an icon in the left ribbon.
-		this.ribbonIcon = this.addRibbonIcon('bot', 'AI Companion', (evt: MouseEvent) => {
+		this.ribbonIcon = this.addRibbonIcon('bot', 'AI Companion', async (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if(view != null){
@@ -82,6 +89,13 @@ export default class AIComPlugin extends Plugin {
 				} else {
 					this.set_ai('query');
 					this.editor = view.editor;
+					this.view = view;
+					this.viewState = view.getState();
+					var newState = view.getState();
+					newState.source = true;
+					var vsresult: ViewStateResult = {history: false};
+					await view.setState(newState, vsresult);
+					//console.log(view.getState());
 					new Notice("AICom set");
 					this.sendRequest();
 				}
