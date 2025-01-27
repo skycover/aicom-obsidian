@@ -5,6 +5,7 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 interface AIComPluginSettings {
 	ai_url: string,
 	ai_key: string,
+	model_name: string,
 	system_prompt: string;
 	top_k: number,
 	top_p: number,
@@ -17,6 +18,7 @@ interface AIComPluginSettings {
 const DEFAULT_SETTINGS: Partial<AIComPluginSettings> = {
 	ai_url: 'https://api.openai.com/v1',
 	ai_key: '',
+	model_name: 'gpt-4o',
 	system_prompt: 'You are the AI assistant. You talk with people and helps them.',
 	top_k: 30,
 	top_p: 0.9,
@@ -255,6 +257,7 @@ export default class AIComPlugin extends Plugin {
 		console.log('sending request:', params, messages)
 
 		return {
+			model: this.settings.model_name,
 			messages: messages.map(([role, content]) => ({role, content})),
 			stream: true,
 			temperature: this.settings.temperature
@@ -402,7 +405,17 @@ class AIComSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			}));
 
-	
+		new Setting(containerEl)
+			.setName('Model name')
+			.setDesc('The name of the model to use for the conversation.')
+			.addText(text => text
+				.setPlaceholder('gpt-4o')
+				.setValue(this.plugin.settings.model_name)
+				.onChange(async (value) => {
+					this.plugin.settings.model_name = value;
+					await this.plugin.saveSettings();
+				}));
+
 		new Setting(containerEl)
 			.setName('System prompt')
 			.setDesc('The instructions about a conversation. You can override it by System section in particular dialog.')
